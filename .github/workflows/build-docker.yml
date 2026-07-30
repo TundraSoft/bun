@@ -97,7 +97,7 @@ jobs:
 
     steps:
     -
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     -
       name: Set up Docker Buildx
@@ -240,7 +240,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Push the CHANGELOG/README commit with an admin PAT so it can bypass
           # the branch ruleset (Repository admin is on the ruleset bypass list).
@@ -332,7 +332,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       -
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       -
         name: Update repo description
         uses: peter-evans/dockerhub-description@v5
