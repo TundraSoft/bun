@@ -37,6 +37,18 @@ wait_healthy() {
   done
 }
 
+# Wait until the app actually serves HTTP. s6 reports the service "up" as soon
+# as it execs the run script, which is before Bun.serve binds the port, so poll
+# the endpoint rather than trusting the healthcheck alone.
+wait_http() {
+  n=0
+  until docker exec "$1" curl -sf http://localhost:8080/ >/dev/null 2>&1; do
+    n=$((n + 1))
+    [ "$n" -ge 30 ] && return 1
+    sleep 1
+  done
+}
+
 # Bun runtime checks (entrypoint bypassed — no app service started)
 
 # 1. Bun version
@@ -84,7 +96,8 @@ pass "tundra user at uid/gid 1000/1000"
 # 9. Default demo service boots healthy and serves HTTP
 CID="$(docker run -d "$IMG")"
 wait_healthy "$CID" || fail "bun service did not become healthy"
-demo="$(docker exec "$CID" curl -sf http://localhost:8080/)" || fail "demo server did not respond"
+wait_http "$CID" || fail "demo server did not respond"
+demo="$(docker exec "$CID" curl -sf http://localhost:8080/)"
 contains "$demo" "Welcome to Bun" || fail "demo server response unexpected: $demo"
 docker rm -f "$CID" >/dev/null
 CID=""
@@ -94,7 +107,8 @@ pass "default demo service boots healthy and serves HTTP"
 APPDIR="$(cd "$(dirname "$0")/fixtures/app" && pwd)"
 CID="$(docker run -d -e FILE=/app/server.ts -v "$APPDIR":/app:ro "$IMG")"
 wait_healthy "$CID" || fail "FILE-mode service did not become healthy"
-filed="$(docker exec "$CID" curl -sf http://localhost:8080/)" || fail "FILE-mode server did not respond"
+wait_http "$CID" || fail "FILE-mode server did not respond"
+filed="$(docker exec "$CID" curl -sf http://localhost:8080/)"
 contains "$filed" "smoke-fixture-marker" || fail "FILE-mode server did not serve fixture: $filed"
 docker rm -f "$CID" >/dev/null
 CID=""
@@ -103,7 +117,8 @@ pass "FILE mode runs a mounted application"
 # 11. SCRIPT mode runs a package.json script
 CID="$(docker run -d -e SCRIPT=serve -v "$APPDIR":/app:ro "$IMG")"
 wait_healthy "$CID" || fail "SCRIPT-mode service did not become healthy"
-scriptd="$(docker exec "$CID" curl -sf http://localhost:8080/)" || fail "SCRIPT-mode server did not respond"
+wait_http "$CID" || fail "SCRIPT-mode server did not respond"
+scriptd="$(docker exec "$CID" curl -sf http://localhost:8080/)"
 contains "$scriptd" "smoke-fixture-marker" || fail "SCRIPT-mode server did not serve fixture: $scriptd"
 docker rm -f "$CID" >/dev/null
 CID=""
