@@ -31,15 +31,17 @@ ENV BUN_INSTALL=/bun\
 
 # S6: MAXTIME=0 waits indefinitely for services to start; 5000ms shutdown grace.
 
+# Download Bun with wget (provided by the base image) rather than curl, to keep
+# curl and its nghttp2-libs dependency out of the image.
 RUN set -eux; \
-  apk --update --no-cache add curl libgcc libstdc++; \
+  apk --update --no-cache add libgcc libstdc++; \
   case "${TARGETPLATFORM}" in \
   "linux/amd64"|"linux/x86_64") export BUN_ARCH="x64-musl-baseline" ;; \
   "linux/arm64"|"linux/arm/v8") export BUN_ARCH="aarch64-musl" ;; \
   "linux/arm/v7") echo "ERROR: Bun does not provide pre-built binaries for 32-bit ARM (armv7). Only x86_64 and arm64 are supported." && exit 1 ;; \
   *) echo "Unsupported platform: ${TARGETPLATFORM}" ; exit 1 ;; \
   esac; \
-  curl -fLs -o /tmp/bun.zip https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${BUN_ARCH}.zip; \
+  wget -qO /tmp/bun.zip https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${BUN_ARCH}.zip; \
   unzip -q -o /tmp/bun.zip -d /tmp; \
   mv /tmp/bun-linux-${BUN_ARCH}/bun /usr/local/bin/bun; \
   chmod 0755 /usr/local/bin/bun; \

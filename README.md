@@ -381,7 +381,7 @@ docker run -d \
 `/crons/health-check`:
 ```bash
 # Check application health every 5 minutes
-*/5 * * * * curl -f http://localhost:8080/health || exit 1
+*/5 * * * * wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
 ```
 
 ```bash
@@ -499,7 +499,7 @@ Runtime:
 - TypeScript and JSX executed directly, no separate build step
 
 Utilities:
-- cURL — HTTP client
+- wget — HTTP client (from the base image)
 - Bash/sh — shell scripting
 - Healthcheck script — S6-integrated service monitoring
 
