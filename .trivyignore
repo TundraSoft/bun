@@ -1,0 +1,17 @@
+# Trivy vulnerability ignore list (baseline).
+#
+# The container scan hard-fails the build on HIGH/CRITICAL findings that HAVE a
+# fix available (ignore-unfixed: true). Anything listed here is a documented,
+# reviewed exception.
+#
+# Rules:
+#   * One CVE id per line.
+#   * ALWAYS add a comment: why it's accepted + an expiry date to force review.
+#   * Prefer fixing (a rebuild picks up patched packages) over ignoring.
+#
+# Example:
+#   # CVE-2024-12345: no upstream fix in Alpine yet; not reachable in this image.
+#   # Re-review by: 2026-09-01
+#   CVE-2024-12345
+#
+# --- baseline is intentionally empty ---

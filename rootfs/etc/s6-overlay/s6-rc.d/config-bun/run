@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv sh
+
+BUNDIR=${BUN_INSTALL:-'/bun'}
+
+mkdir -p ${BUNDIR}
+
+setgroup ${BUNDIR} /app

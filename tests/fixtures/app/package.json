@@ -1,0 +1,7 @@
+{
+  "name": "bun-smoke-fixture",
+  "private": true,
+  "scripts": {
+    "serve": "bun run server.ts"
+  }
+}

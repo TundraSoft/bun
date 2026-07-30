@@ -1,0 +1,46 @@
+#!/usr/bin/with-contenv sh
+cd /app
+
+# Runs a package.json SCRIPT, a FILE, or a demo fallback. Bun has no permission
+# system, so there are no ALLOW_* flags. HOT=1 -> --hot (wins over WATCH=1 ->
+# --watch); DEBUG=1 enables shell tracing.
+RELOAD_ARG=""
+if [ "$HOT" = "1" ]; then
+  RELOAD_ARG="--hot"
+elif [ "$WATCH" = "1" ]; then
+  RELOAD_ARG="--watch"
+fi
+
+if [ "$DEBUG" = "1" ]; then
+  echo "[DEBUG] Bun Debug Mode enabled"
+  echo "[DEBUG] SCRIPT: $SCRIPT"
+  echo "[DEBUG] FILE: $FILE"
+  echo "[DEBUG] RELOAD_ARG: $RELOAD_ARG"
+  set -x
+fi
+
+# SCRIPT mode
+if [ ! -z "$SCRIPT" ]; then
+  exec s6-setuidgid tundra bun run $RELOAD_ARG "$SCRIPT"
+
+# FILE mode
+elif [ ! -z "$FILE" ]; then
+  exec s6-setuidgid tundra bun run $RELOAD_ARG "$FILE"
+
+# Fallback: demo app
+else
+  cat << 'EOF' > /app/app.ts
+const port = Number(Bun.env.PORT ?? 8080);
+
+Bun.serve({
+  port,
+  hostname: "0.0.0.0",
+  fetch() {
+    return new Response("Welcome to Bun 🥟\n");
+  },
+});
+
+console.log(`Welcome to Bun 🥟 — listening on http://0.0.0.0:${port}`);
+EOF
+  exec s6-setuidgid tundra bun run $RELOAD_ARG /app/app.ts
+fi

@@ -1,0 +1,270 @@
+name: Security Scanning
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    paths-ignore:
+      - .dockerignore
+      - .gitignore
+      - .github/ISSUE_TEMPLATE/*
+      - .github/PULL_REQUEST_TEMPLATE*
+      - README.md
+      - LICENSE
+    # Ignore CI if commit message contains '[skip ci]' (e.g., from update-readme chore)
+    # This is a GitHub Actions convention, not a YAML field, so we use a job-level if below
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    # Manual trigger for on-demand security scanning
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  # Setup versions once for all container-related scans
+  setup:
+    name: Get Versions
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      alpine-version: ${{ steps.versions.outputs.alpine-version }}
+      bun-version: ${{ steps.versions.outputs.bun-version }}
+    steps:
+      - name: Get Latest Alpine and Bun Versions
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get latest stable Alpine version
+          LATEST_ALPINE=$(curl -s https://cz.alpinelinux.org/alpine/latest-stable/releases/x86_64/latest-releases.yaml | awk '/version:/ {print $2; exit}')
+
+          # Get latest Bun version (authenticated to avoid the anonymous rate
+          # limit that yields an empty version -> a bad tag -> 404 at build time)
+          LATEST_BUN=$(curl -s --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" https://api.github.com/repos/oven-sh/bun/releases/latest | jq -r '.tag_name' | sed 's/^bun-v//')
+          [ -n "$LATEST_BUN" ] && [ "$LATEST_BUN" != "null" ] || { echo "Failed to resolve Bun version"; exit 1; }
+
+          echo "alpine-version=${LATEST_ALPINE}" >> $GITHUB_OUTPUT
+          echo "bun-version=${LATEST_BUN}" >> $GITHUB_OUTPUT
+
+          echo "Using Alpine ${LATEST_ALPINE} and Bun ${LATEST_BUN}"
+
+  # Container Security Scanning
+  container-scan:
+    name: Container Security Scan
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg ALPINE_VERSION=${{ needs.setup.outputs.alpine-version }} \
+            --build-arg BUN_VERSION=${{ needs.setup.outputs.bun-version }} \
+            -t security-scan:latest .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'security-scan:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Hard gate: fail the build on HIGH/CRITICAL vulnerabilities that have a
+      # fix available. ignore-unfixed means we only fail when we are behind on
+      # patches (the stale-package case), not on CVEs with no upstream fix.
+      # Documented exceptions live in .trivyignore (with expiry dates).
+      - name: Fail on fixable HIGH/CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'security-scan:latest'
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+          trivyignores: '.trivyignore'
+
+  # Dependency Security Scanning (Free with Trivy)
+  dependency-scan:
+    name: Dependency Security Scan
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run Trivy for dependency scanning
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-dependency-results.sarif'
+
+      - name: Upload Trivy dependency scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-dependency-results.sarif'
+
+  # Code Security Scanning
+  # Disabled: CodeQL is for traditional code (JS, Python, etc.)
+  # This project uses Dockerfile/Shell - handled by Semgrep instead
+  code-scan:
+    name: Code Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+
+  # Secret Scanning (Free) - Also runs in build workflow as backup
+  secret-scan:
+    name: Secret Scanning
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    # GitLeaks doesn't support workflow_run trigger, so skip when triggered by workflow_run
+    if: github.event_name != 'workflow_run'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # Fetch full history for GitLeaks to scan all commits
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_KEY}}
+
+  # SAST (Static Application Security Testing) - Free
+  sast-scan:
+    name: SAST Security Scan
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run Semgrep (Free Community Rules)
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/dockerfile
+
+  # License Compliance Scanning (Free Alternative)
+  license-scan:
+    name: License Compliance Scan
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: License Check with licensee
+        run: |
+          # Install licensee gem with sudo
+          sudo gem install licensee
+
+          # Run license detection
+          licensee detect --json > license-report.json
+
+          # Display results
+          echo "## License Compliance Report" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat license-report.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # Container Image Scanning with Grype
+  grype-scan:
+    name: Grype Vulnerability Scan
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg ALPINE_VERSION=${{ needs.setup.outputs.alpine-version }} \
+            --build-arg BUN_VERSION=${{ needs.setup.outputs.bun-version }} \
+            -t grype-scan:latest .
+
+      - name: Run Grype vulnerability scanner
+        uses: anchore/scan-action@v7
+        id: grype
+        with:
+          image: "grype-scan:latest"
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Upload Grype scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+
+  # Security Summary
+  security-summary:
+    name: Security Summary
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    needs: [setup, container-scan, dependency-scan, secret-scan, sast-scan, grype-scan, code-scan]
+    if: always()
+    steps:
+      - name: Security Scan Summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Container Security: ${{ needs.container-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependency Security: ${{ needs.dependency-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SAST Scanning (Semgrep): ${{ needs.sast-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "- Secret Scanning: skipped (runs in build workflow)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Secret Scanning: ${{ needs.secret-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- Grype Scanning: ${{ needs.grype-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the Security tab for detailed results." >> $GITHUB_STEP_SUMMARY

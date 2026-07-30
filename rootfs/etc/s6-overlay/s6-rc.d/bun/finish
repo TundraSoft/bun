@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv sh
+
+# Runs when the bun service stops. S6 passes the exit code as $1.
+EXIT_CODE=${1:-0}
+
+if [ $EXIT_CODE -eq 0 ]; then
+  echo "[bun] Service stopping gracefully (exit code: $EXIT_CODE)"
+else
+  echo "[bun] Service crashed or stopped unexpectedly (exit code: $EXIT_CODE)"
+fi
+
+exit 0
