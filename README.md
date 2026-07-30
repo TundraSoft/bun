@@ -20,7 +20,6 @@ A lightweight Bun runtime image built on Alpine Linux with S6 overlay, native mu
   - [Basic Usage](#basic-usage)
   - [Running Applications](#running-applications)
   - [Environment Variables](#environment-variables)
-  - [Permissions](#permissions)
   - [Volumes](#volumes)
 - [Build-Time Optimization](#build-time-optimization)
 - [Development Mode](#development-mode)
@@ -178,23 +177,6 @@ docker run -d \
 | `S6_CMD_WAIT_FOR_SERVICES_MAXTIME` | Max time (ms) to wait for services to start (0 = infinite) | `0` |
 | `S6_KILL_FINISH_MAXTIME` | Grace period (ms) for graceful shutdown | `5000` |
 <!-- ENV-VARS-END -->
-
-### Permissions
-
-Unlike Deno, Bun does not implement a runtime permission sandbox — code runs with the same privileges as the process. There are therefore no `--allow-*` flags or `ALLOW_*` environment variables.
-
-Isolate untrusted workloads at the container boundary instead:
-
-```bash
-# Drop capabilities, read-only rootfs, and run as the non-root tundra user
-docker run --read-only --tmpfs /tmp --tmpfs /run \
-  --user 1000:1000 --cap-drop=ALL \
-  -e FILE=/app/main.ts \
-  -v $(pwd):/app:ro \
-  tundrasoft/bun:latest
-```
-
-See [Security](#security) for hardening guidance.
 
 ### Volumes
 
