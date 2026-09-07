@@ -78,7 +78,7 @@ With no `FILE` or `SCRIPT` set, the container runs a small built-in demo server 
 |---------|------|
 | [latest](https://hub.docker.com/r/tundrasoft/bun/tags?name=latest) | Latest stable release |
 | [edge](https://hub.docker.com/r/tundrasoft/bun/tags?name=edge) | Edge/development version |
-| [1.4](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4) | [1.4.0](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4.0) |
+| [1.4](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4) | [1.4.2](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4.2), [1.4.1](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4.1), [1.4.0](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.4.0) |
 | [1.3](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3) | [1.3.14](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3.14), [1.3.13](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3.13), [1.3.12](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3.12), [1.3.11](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3.11), [1.3.10](https://hub.docker.com/r/tundrasoft/bun/tags?name=1.3.10) |
 
 <!-- TAGS-END -->
